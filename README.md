@@ -2,7 +2,8 @@
 
 The purpose of this repo is to have *mini* projects using `SQL`.📚  
 **What is a mini project?** ❓  
-Well, I define mini project as files where I can practice SQL topics such as:
+ > Well, I define mini project as files where I can practice SQL topics such as:
+ 
  - Cleansing 🧼
  - Profiling 📊
  - Joins 🔑
