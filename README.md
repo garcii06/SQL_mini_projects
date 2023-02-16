@@ -13,3 +13,6 @@ This gives me the advantage to practice only specific topics without going to de
 
 ### Supermarket Analysis 🏪
 Practice of Joins, Temporary Tables, Ad Hoc queries.
+
+### Online Retail Analysis 🌐
+Practice of CTEs, Data Cleaning, Window Functions.
