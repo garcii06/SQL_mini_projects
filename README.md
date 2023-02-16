@@ -1,4 +1,4 @@
-# SQL_mini_projects
+# SQL Mini Projects
 
 The purpose of this repo is to have *mini* projects using `SQL`.📚  
 **What is a mini project?** ❓  
