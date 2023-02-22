@@ -13,7 +13,21 @@ Without the necessity of developing a `dashboard`, using other tools such as `Ex
 This gives me the advantage to practice only specific topics without going to deep.
 
 ### Supermarket Analysis 🏪
-Practice of Joins, Temporary Tables, Ad Hoc queries.
+Practice of:
+ - Joins
+ - Temporary Tables
+ - Ad Hoc queries
 
 ### Online Retail Analysis 🌐
-Practice of CTEs, Data Cleaning, Window Functions.
+Practice of:
+ - CTEs
+ - Data Cleaning
+ - Window Functions
+ 
+ ### Mexican Toys Sales 🪀
+ Practice of:
+ - Multiple Joins
+ - CTEs
+ - Window Functions
+ - Temporary Tables
+ - Ad Hoc
