@@ -54,7 +54,7 @@ WITH units_month AS(
 SELECT Year
 	, Month
 	, total_units_sold_month
-	, SUM(total_units_sold_month) OVER (PARTITION BY Year ORDER BY Year, Month) 
+	, SUM(total_units_sold_month) OVER (PARTITION BY Year ORDER BY Year, Month) cum_sum_total_units_sold
 FROM units_month;
 
 -- QA of mx_toys_stores table.
@@ -141,7 +141,7 @@ ORDER BY Product_Category, Month;
 ---- 3. Are sales being lost with out-of-stock products at certain locations?
 ---- Lost sales can be at location-month level, or location-day level.
 -- At month level, we have 187 occations where the stock wasn't available for the next client.
-WITH stock_month AS(
+WITH stock_monthly AS(
 	SELECT store.Store_Location
 		, sales.Sale_ID
 		, prods.Product_Name
@@ -167,30 +167,31 @@ SELECT Store_Location
 	, SUM(Stock_On_Hand) stock_available
 	, SUM(Units) units_sold
 	, SUM(Stock_On_Hand) - SUM(Units) stock_left
-FROM stock_month
+FROM stock_monthly
 GROUP BY Store_Location, Store_City, Product_Name, Year, Month
 HAVING SUM(Stock_On_Hand) - SUM(Units) = 0
 ORDER BY Store_Location, Store_City, Product_Name, Year, Month, SUM(Stock_On_Hand) - SUM(Units);
 
 -- At daily level, we got 473 days/occations where the stock level of a certain product was 0.
-WITH stock_daily AS(
-	SELECT store.Store_Location
-		, sales.Sale_ID
-		, prods.Product_Name
-		, inven.Stock_On_Hand
-		, sales.Units
-		, sales.Date
-		, store.Store_City
-		, YEAR(sales.Date) Year
-		, MONTH(sales.Date) Month
-		, DAY(sales.Date) Day
-	FROM mx_toys_inventory inven LEFT JOIN mx_toys_stores store
-	ON inven.Store_ID = store.Store_ID 
-	LEFT JOIN mx_toys_sales sales
-	ON inven.Store_ID = sales.Store_ID AND inven.Product_ID = sales.Product_ID
-	LEFT JOIN mx_toys_products prods
-	ON inven.Product_ID = prods.Product_ID
-)
+-- Daily stock as a temporary table, as it will be used from now on.
+SELECT store.Store_Location
+	, sales.Sale_ID
+	, prods.Product_Name
+	, inven.Stock_On_Hand
+	, sales.Units
+	, sales.Date
+	, store.Store_City
+	, YEAR(sales.Date) Year
+	, MONTH(sales.Date) Month
+	, DAY(sales.Date) Day
+INTO #stock_daily
+FROM mx_toys_inventory inven LEFT JOIN mx_toys_stores store
+ON inven.Store_ID = store.Store_ID 
+LEFT JOIN mx_toys_sales sales
+ON inven.Store_ID = sales.Store_ID AND inven.Product_ID = sales.Product_ID
+LEFT JOIN mx_toys_products prods
+ON inven.Product_ID = prods.Product_ID;
+
 SELECT Store_Location
 	, Product_Name
 	, Store_City
@@ -200,28 +201,14 @@ SELECT Store_Location
 	, SUM(Stock_On_Hand) stock_available
 	, SUM(Units) units_sold
 	, SUM(Stock_On_Hand) - SUM(Units) stock_left
-FROM stock_daily
+FROM #stock_daily
 GROUP BY Store_Location, Store_City, Product_Name, Year, Month, Day
 HAVING SUM(Stock_On_Hand) - SUM(Units) = 0
 ORDER BY Store_Location, Store_City, Product_Name, Year, Month, Day, SUM(Stock_On_Hand) - SUM(Units);
 
 -- How many days does the store gets out of stock since the last time?
 -- days_diff_nostock is the column that tells us how many days passed since the last time that certain product was out of stock.
-WITH stock_daily AS(
-	SELECT store.Store_Location
-		, sales.Sale_ID
-		, prods.Product_Name
-		, inven.Stock_On_Hand
-		, sales.Units
-		, sales.Date
-		, store.Store_City
-	FROM mx_toys_inventory inven LEFT JOIN mx_toys_stores store
-	ON inven.Store_ID = store.Store_ID 
-	LEFT JOIN mx_toys_sales sales
-	ON inven.Store_ID = sales.Store_ID AND inven.Product_ID = sales.Product_ID
-	LEFT JOIN mx_toys_products prods
-	ON inven.Product_ID = prods.Product_ID
-), nostock_days AS(
+WITH nostock_days AS(
 	SELECT Store_Location
 		, Product_Name
 		, Store_City
@@ -230,7 +217,7 @@ WITH stock_daily AS(
 		, SUM(Stock_On_Hand) stock_available
 		, SUM(Units) units_sold
 		, SUM(Stock_On_Hand) - SUM(Units) stock_left
-	FROM stock_daily
+	FROM #stock_daily
 	GROUP BY Store_Location, Store_City, Product_Name, Date
 	HAVING SUM(Stock_On_Hand) - SUM(Units) = 0
 )
@@ -249,21 +236,7 @@ FROM nostock_days;
 -- Setting the difference for products with less than 7 days to run out of stock.
 -- This can help to know which ones weren't restock on time, or sold out too quickly.
 -- I set it to 7 thinking that restock of products is done weekly.
-WITH stock_daily AS(
-	SELECT store.Store_Location
-		, sales.Sale_ID
-		, prods.Product_Name
-		, inven.Stock_On_Hand
-		, sales.Units
-		, sales.Date
-		, store.Store_City
-	FROM mx_toys_inventory inven LEFT JOIN mx_toys_stores store
-	ON inven.Store_ID = store.Store_ID 
-	LEFT JOIN mx_toys_sales sales
-	ON inven.Store_ID = sales.Store_ID AND inven.Product_ID = sales.Product_ID
-	LEFT JOIN mx_toys_products prods
-	ON inven.Product_ID = prods.Product_ID
-), nostock_days AS(
+WITH nostock_days AS(
 	SELECT Store_Location
 		, Product_Name
 		, Store_City
@@ -272,7 +245,7 @@ WITH stock_daily AS(
 		, SUM(Stock_On_Hand) stock_available
 		, SUM(Units) units_sold
 		, SUM(Stock_On_Hand) - SUM(Units) stock_left
-	FROM stock_daily
+	FROM #stock_daily
 	GROUP BY Store_Location, Store_City, Product_Name, Date
 	HAVING SUM(Stock_On_Hand) - SUM(Units) = 0
 )
@@ -287,21 +260,7 @@ WHERE DATEDIFF(DAY, lagged_Date, Date) <= 7;
 -- We can calculate the average time between the days that a product runs out of stock.
 -- This can help to predict how much time we can expect before running out of stock.
 -- NULL means that it was just a one time occation where we ran out of stock.
-WITH stock_daily AS(
-	SELECT store.Store_Location
-		, sales.Sale_ID
-		, prods.Product_Name
-		, inven.Stock_On_Hand
-		, sales.Units
-		, sales.Date
-		, store.Store_City
-	FROM mx_toys_inventory inven LEFT JOIN mx_toys_stores store
-	ON inven.Store_ID = store.Store_ID 
-	LEFT JOIN mx_toys_sales sales
-	ON inven.Store_ID = sales.Store_ID AND inven.Product_ID = sales.Product_ID
-	LEFT JOIN mx_toys_products prods
-	ON inven.Product_ID = prods.Product_ID
-), nostock_days AS(
+WITH nostock_days AS(
 	SELECT Store_Location
 		, Product_Name
 		, Store_City
@@ -310,7 +269,7 @@ WITH stock_daily AS(
 		, SUM(Stock_On_Hand) stock_available
 		, SUM(Units) units_sold
 		, SUM(Stock_On_Hand) - SUM(Units) stock_left
-	FROM stock_daily
+	FROM #stock_daily
 	GROUP BY Store_Location, Store_City, Product_Name, Date
 	HAVING SUM(Stock_On_Hand) - SUM(Units) = 0
 ), diff_nostock_calc AS(
@@ -374,4 +333,4 @@ SELECT Store_Location
 FROM last_stock_month lastk LEFT JOIN mx_toys_products prods
 ON lastk.Product_Name = prods.Product_Name
 WHERE Date = lastest_day_stock
-ORDER BY Store_City, Store_Location, Date
+ORDER BY Store_City, Store_Location, Date;
