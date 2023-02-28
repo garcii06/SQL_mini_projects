@@ -54,7 +54,8 @@ WITH units_month AS(
 SELECT Year
 	, Month
 	, total_units_sold_month
-	, SUM(total_units_sold_month) OVER (PARTITION BY Year ORDER BY Year, Month) cum_sum_total_units_sold
+	, SUM(total_units_sold_month) OVER (PARTITION BY Year ORDER BY Year, Month) cum_sum_total_units_sold_year
+	, SUM(total_units_sold_month) OVER (ORDER BY Year, Month) cum_sum_total_units_sold
 FROM units_month;
 
 -- QA of mx_toys_stores table.
@@ -76,39 +77,54 @@ FROM mx_toys_inventory;
 ---- Can be defined as with product category sells the most with the most margin profit.
 
 -- Toys are the most profitable category with the most profit margin and less units solds than the second category.
+WITH profit_category AS(
+	SELECT Product_Category
+		, (Product_Price - Product_Cost) * SUM(Units) profit
+		, SUM(Units) units_sold
+	FROM mx_toys_sales sales LEFT JOIN mx_toys_products prods
+	ON sales.Product_ID = prods.Product_ID
+	GROUP BY Product_Category, Product_Price, Product_Cost
+)
 SELECT Product_Category
-	, (SUM(Product_Price) - SUM(Product_Cost)) * SUM(Units) profit
-	, SUM(Units) units_sold
-FROM mx_toys_sales sales LEFT JOIN mx_toys_products prods
-ON sales.Product_ID = prods.Product_ID
+	, SUM(profit) profit
+	, SUM(units_sold) units_sold
+FROM profit_category
 GROUP BY Product_Category
-ORDER BY (SUM(Product_Price) - SUM(Product_Cost)) * SUM(Units) DESC;
+ORDER BY profit DESC;
 
 -- Toys are the most profitable category for all the store locations, while Sports & Outdoors is the less profitable.
 -- Games, Arts & Crafts, and Electronics are always in between.
+WITH store_profit AS(
+	SELECT Product_Category
+		, Store_Location 
+		, (Product_Price - Product_Cost) * SUM(Units) profit
+		, SUM(Units) units_sold
+	FROM mx_toys_sales sales LEFT JOIN mx_toys_products prods
+	ON sales.Product_ID = prods.Product_ID
+	LEFT JOIN mx_toys_stores stors 
+	ON sales.Store_ID = stors.Store_ID
+	GROUP BY Product_Category, Store_Location, Product_Price, Product_Cost
+)
 SELECT Product_Category
-	, (SUM(Product_Price) - SUM(Product_Cost)) * SUM(Units) profit
-	, SUM(Units) units_sold
-	, Store_Location 
-FROM mx_toys_sales sales LEFT JOIN mx_toys_products prods
-ON sales.Product_ID = prods.Product_ID
-LEFT JOIN mx_toys_stores stors 
-ON sales.Store_ID = stors.Store_ID
+	, Store_Location
+	, SUM(profit) profit
+	, SUM(units_sold) units_sold
+FROM store_profit
 GROUP BY Product_Category, Store_Location
-ORDER BY Store_Location, (SUM(Product_Price) - SUM(Product_Cost)) * SUM(Units) DESC;
+ORDER BY Store_Location, 3 DESC;
 
 -- Although Art & Crafts isn't the less profitable category it needs to sell a lot to be profitable.
 -- This can be seen when we add the max_units_sold by Location and recognize that the maximum is always the Art Category.
 WITH profit_location AS(
 	SELECT Product_Category
-		, (SUM(Product_Price) - SUM(Product_Cost)) * SUM(Units) profit
-		, SUM(Units) units_sold
 		, Store_Location 
+		, (Product_Price - Product_Cost) * SUM(Units) profit
+		, SUM(Units) units_sold
 	FROM mx_toys_sales sales LEFT JOIN mx_toys_products prods
 	ON sales.Product_ID = prods.Product_ID
 	LEFT JOIN mx_toys_stores stors 
 	ON sales.Store_ID = stors.Store_ID
-	GROUP BY Product_Category, Store_Location
+	GROUP BY Product_Category, Store_Location, Product_Price, Product_Cost
 )
 SELECT Product_Category
 	, profit
